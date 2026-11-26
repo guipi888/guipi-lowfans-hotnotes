@@ -43,7 +43,9 @@ nothing to show.
 """
 
 import argparse
+import contextlib
 import html as html_lib
+import io
 import json
 import os
 import re
@@ -51,6 +53,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.parse
 import urllib.request
@@ -59,10 +62,17 @@ from collections import Counter
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-import requests
+try:
+    import requests
+except ImportError:  # 沙箱/精简环境：--help / --selfcheck / --menu 不依赖 requests
+    requests = None
 
-BASE_URL = "http://8.148.235.41/liuchuan/api/v1"   # 2026-11-25 改名后前缀
-LEGACY_BASE_URL = "http://8.148.235.41/yaundian/api/v1"   # 旧前缀已 404，仅报错提示用
+# 通用客户端版：端点走环境变量，未配置时保持占位符（不发起任何请求）。
+# 包内不出现真实 IP 与明文 HTTP——占位符域名 example.com 为保留域名。
+PLACEHOLDER_BASE_URL = "https://your-liuchuan-api.example.com/liuchuan/api/v1"
+BASE_URL = os.environ.get("LIUCHUAN_BASE_URL") or PLACEHOLDER_BASE_URL
+LEGACY_BASE_URL = (os.environ.get("LIUCHUAN_LEGACY_BASE_URL")
+                   or "https://your-liuchuan-api.example.com/yaundian/api/v1")
 LEGACY_CACHE_DIR = Path.home() / ".yaundian_cache"  # 旧缓存目录，一次性迁到新目录
 TIME_RANGES = ("12h", "24h", "yesterday", "3d", "7d")
 SORTS = ("rank", "like", "collect", "comment", "share",
@@ -644,6 +654,8 @@ def probe_meta(base_url: str, key: str = "") -> dict:
 
     只用来探活 + 看数据新鲜度（last_ingest_at / 各维度 updated_at）。
     """
+    if requests is None:
+        return {}
     try:
         resp = requests.get(f"{base_url.rstrip('/')}/meta",
                             headers={"X-API-Key": key} if key else {},
@@ -682,10 +694,18 @@ class FetchError(Exception):
         self.wait = wait
 
 
+def _need_requests() -> None:
+    """requests 缺失时给出可操作报错（不裸 AttributeError）。"""
+    if requests is None:
+        raise FetchError("network",
+                         "当前环境未安装 requests 库，请先执行 pip install requests")
+
+
 def fetch_page(base_url: str, key: str, time_range: str, sort: str,
                page: int, category: str = "", keyword: str = "",
                note_type: str = "") -> dict:
     """One GET /notes call. Retries 429 (rate only), 5xx and broken bodies."""
+    _need_requests()
     url = f"{base_url.rstrip('/')}/notes"
     params = {"time_range": time_range, "sort": sort,
               "page": page, "page_size": PAGE_SIZE}
@@ -783,6 +803,7 @@ def fetch_page(base_url: str, key: str, time_range: str, sort: str,
 
 def fetch_categories(base_url: str, key: str) -> list:
     """GET /v1/categories (flat). Reference data, costs no row quota."""
+    _need_requests()
     url = f"{base_url.rstrip('/')}/categories"
     resp = requests.get(url, params={"flat": 1},
                         headers={"X-API-Key": key} if key else {}, timeout=25)
@@ -2539,10 +2560,95 @@ def resolve_api_key(cli_key: str = "") -> str:
     return ""
 
 
+SELFCHECK_SAMPLE = [
+    {"note_id": "sc1", "title": "selfcheck sample note",
+     "desc": "离线自检样本正文，不来自任何真实接口。",
+     "like_count": 12, "collect_count": 3, "comment_count": 1,
+     "share_count": 0, "fans_count": 800, "tags": ["自我检查"],
+     "category": "样本", "nickname": "sample",
+     "published_at": "2026-11-26", "video_url": "", "note_type": "normal"},
+]
+
+ENDPOINT_HINT = """未配置数据服务端点：环境变量 LIUCHUAN_BASE_URL 未设置（当前为占位符，不会发请求）。
+取数前先配置（二选一）：
+  1) 环境变量（推荐，永久生效）：
+     Linux/macOS:  export LIUCHUAN_BASE_URL=https://<你的服务域名>/liuchuan/api/v1
+     Windows:      [Environment]::SetEnvironmentVariable("LIUCHUAN_BASE_URL","https://<你的服务域名>/liuchuan/api/v1","User")
+  2) 单次指定：    --base-url https://<你的服务域名>/liuchuan/api/v1
+API Key（可选但推荐）：export LIUCHUAN_API_KEY=<你的 key>
+不依赖端点的离线能力：--menu / --selfcheck / --show-paths / --show-profile / --tag-report"""
+
+
+def run_selfcheck() -> int:
+    """离线自检：不联网、不要 Key。任一项失败即 exit 1。"""
+    checks = []
+
+    def ok(name, detail=""):
+        checks.append((True, name, detail))
+
+    def bad(name, detail=""):
+        checks.append((False, name, detail))
+
+    ok("python", f"{sys.version_info.major}.{sys.version_info.minor}."
+                 f"{sys.version_info.micro}")
+    ok("requests", "已安装" if requests is not None else
+       "未安装（取数需 pip install requests；离线能力不受影响）")
+    try:
+        assert parse_time_range("1") == "12h"
+        assert parse_time_range("3") == "yesterday"
+        assert parse_type("2") == "video"
+        assert parse_type("图文") == "normal"
+        ok("参数解析", "time-range 编号映射 / type 编号与中文映射均正确")
+    except AssertionError as exc:
+        bad("参数解析", repr(exc))
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        probe = CACHE_DIR / ".selfcheck.tmp"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+        ok("缓存目录可写", str(CACHE_DIR))
+    except OSError as exc:
+        bad("缓存目录可写", str(exc))
+    try:
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            print_menu()
+        text = buf.getvalue()
+        if "问题 1" in text and "问题 6" in text:
+            ok("问卷打印", f"--menu 输出 {len(text)} 字符，六题齐全")
+        else:
+            bad("问卷打印", "输出缺少问卷结构")
+    except Exception as exc:
+        bad("问卷打印", repr(exc))
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            out = render_html(
+                SELFCHECK_SAMPLE,
+                {"time_range": "12h", "data_updated_at": "2026-11-26 12:00",
+                 "pulled": 1, "from_cache": True},
+                "selfcheck", Path(td) / "selfcheck.html")
+            size = out.stat().st_size
+            if size > 1000:
+                ok("HTML 看板渲染", f"离线样本 {size} 字节")
+            else:
+                bad("HTML 看板渲染", f"输出过小（{size} 字节）")
+    except Exception as exc:
+        bad("HTML 看板渲染", repr(exc))
+
+    width = max(len(n) for _, n, _ in checks)
+    for passed, name, detail in checks:
+        print(f"[{'PASS' if passed else 'FAIL'}] {name.ljust(width)}  {detail}")
+    failed = [c for c in checks if not c[0]]
+    print(f"\nselfcheck: {len(checks) - len(failed)}/{len(checks)} 通过"
+          + ("，全部通过" if not failed else f"，{len(failed)} 项失败"))
+    return 0 if not failed else 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Query xiaohongshu low-fans-hot notes from the "
-                    "liuchuan-data public API")
+                    "liuchuan-data public API (generic client: endpoint via "
+                    "LIUCHUAN_BASE_URL, key via LIUCHUAN_API_KEY)")
     parser.add_argument("--time-range", default="12h",
                         type=parse_time_range, choices=TIME_RANGES,
                         help="time window (default: 12h); accepts 1-5 as "
@@ -2663,7 +2769,24 @@ def main() -> int:
                         help="skip HTML generation, print the table only")
     parser.add_argument("--json", action="store_true",
                         help="print raw JSON instead of a table")
+    parser.add_argument("--selfcheck", action="store_true",
+                        help="offline self-check (no network, no key): "
+                             "imports, arg parsing, cache dir, questionnaire "
+                             "and the HTML board with a bundled sample")
     args = parser.parse_args()
+
+    if args.selfcheck:
+        return run_selfcheck()
+
+    # 通用客户端版：端点未配置（占位符）时不发注定失败的请求
+    if (args.base_url == PLACEHOLDER_BASE_URL
+            and "--base-url" not in sys.argv
+            and not (args.menu or args.show_paths or args.set_cache_dir
+                     or args.show_profile or args.forget_profile
+                     or args.save_profile or args.clear_cache
+                     or args.stop_serve or args.tag_report)):
+        print(ENDPOINT_HINT, file=sys.stderr)
+        return 0 if len(sys.argv) == 1 else 2
 
     # v1.34：路径先定下来（命令行 > 环境变量 > 指针文件 > 平台默认），
     # 首次启动把旧的家目录缓存复制过来（只复制、不删除）
@@ -3013,5 +3136,14 @@ def main() -> int:
     return 0
 
 
+# ── 引流信息（固定输出）─────────────────────────────────────────
+def _print_leadgen():
+    print("")
+    print("💡 更多实用 AI 效率工具和技能，领取自媒体 IP&超级个体&一人公司资料，关注公众号「桂皮AI实战」")
+    print("📱 加入自媒体&AI 副业变现交流群：https://e418e2e692454bfaa8b6206e3f0ba789.app.codebuddy.work")
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    _rc = main()
+    _print_leadgen()
+    sys.exit(_rc)

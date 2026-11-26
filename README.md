@@ -1,12 +1,13 @@
-# 流川低粉爆款数据获取（技能目录）
+# 小红书低粉爆款数据获取（技能目录）
 
 ## 目录定位
 
-本目录是「流川低粉爆款数据获取」技能的用户级安装位置（Doubao Work 的
-`.user_skills\流川低粉爆款数据获取\`，与 `D:\WorkBuddyData\.workbuddy\skills\` 为同步副本）。
+本目录是「小红书低粉爆款数据获取」技能的用户级安装位置（WorkBuddy 的
+`.workbuddy/skills/` 下的技能目录，与本地开发目录为同步副本）。
 历史沿革：2026-11-24 创建为「小红书低粉爆款采集」→ 2026-11-25 更名「原点低粉爆款数据获取」
-（原名"采集"二字有误导，本技能不执行采集，只从 ECS 获取数据）→ 2026-11-25 更名
-「流川低粉爆款数据获取」（桂皮指定品牌名）。更名仅改名称，功能无变化。
+（原名"采集"二字有误导，本技能不执行采集，只从数据服务获取）→ 2026-11-25 更名
+「流川低粉爆款数据获取」（桂皮指定品牌名）→ 2026-11-26 对外发布版改名
+「小红书低粉爆款数据获取」（通用客户端形态，不绑定自有服务品牌）。更名仅改名称，功能无变化。
 
 ## 文件清单
 
@@ -74,7 +75,7 @@
 下来？」——固定后下次做低粉爆款只需回「沿用」，不必再描述定位。
 
 - `--save-profile --category … --position …`：把本次的类目、定位词、正文词、
- 时间维度、采样、规模、过滤阈值、类型整套写进 `<配置目录>/profile.json`
+ 时间维度、采样、规模、过滤阈值、类型整套写进 `profile.json`（配置目录）
   （零配额、不取数）
 - `--show-profile` 查看当前人设，`--forget-profile` 取消固定
 - 固定后 `--menu` 顶部打印人设，问题 1 多出 `0. 沿用已固定人设`，各题 ★ 也按
@@ -106,7 +107,7 @@ agent 从标题、正文、标签三处提炼主题组，有几个算几个（�
 `--tag-groups "主题=词a,词b;…"` 重渲染（缓存命中、零配额）；组内词会同时比对该条
 的标签、标题、正文。
 
-每次真实取数都会把主题组和原始标签**增量并进** `<缓存目录>/theme_cache.json`
+每次真实取数都会把主题组和原始标签**增量并进** `theme_cache.json`（缓存目录）
 （按类目分 scope；组内词只增不减、老组永不丢、同一批重渲染不重复计数）。看板因此
 会列出该类目**累计的全部主题组**，加上「未被任何主题覆盖且本批出现 ≥2 次」的高频
 单标签（最多 60 个），按**本批命中 → 历史累计**排序；本批 0 命中的主题仍保留但暗显。
@@ -120,7 +121,7 @@ agent 从标题、正文、标签三处提炼主题组，有几个算几个（�
 小徽标（本期写「本次 …」），看板顶部时间条为
 `今天 ｜ 昨天 ｜ 近1周 ｜ 近1个月 ｜ 近3个月 ｜ 自定义时间`，每枚带实时条数；点
 「自定义时间」用旁边两个日期框指定起止（起止颠倒自动对调）。每次真实取数都会往
-`<缓存目录>/history/` 落一份快照（`notes_...__YYMMDD_HHMM.json`），既有缓存也会
+`history/`（缓存目录下） 落一份快照（`notes_...__YYMMDD_HHMM.json`），既有缓存也会
 补建快照，所以这些窗口能筛出本地缓存过的历史批次。默认看「今天」，隔天才打开且今天
 为空时自动退到覆盖全部批次的自定义区间；历史条目只做参照——结论块与 KPI 仍只算当期，
 避免命中率被撑爆；`--no-history` 可关历史池。要清掉本地样本：
@@ -151,7 +152,7 @@ agent 从标题、正文、标签三处提炼主题组，有几个算几个（�
 
 出完 HTML 后脚本自动在文件所在目录起一个 `python -m http.server`（只绑
 `127.0.0.1`，端口 8777 起挑空闲，同目录复用，状态存
-`<缓存目录>/serve.json`），`【结论】` 末尾打印
+`serve.json`（缓存目录）），`【结论】` 末尾打印
 `预览地址：http://127.0.0.1:8777/低粉爆款_情感_12h.html`，可直接点开或粘进浏览器。
 
 - 该服务只是把本地文件用 http 发出来，**HTML 仍只在本机，没有上传到服务器**
@@ -160,8 +161,11 @@ agent 从标题、正文、标签三处提炼主题组，有几个算几个（�
 ## 数据来源
 
 数据来源（流川数据服务 liuchuan-data，2026-11-25 由 yaundian-data 改名）：
-本地采集器按官方分类补采灰豚低粉爆文榜（12h/24h/昨日/3d/7d 五维度）推送至阿里云 ECS，
-经公网只读 API 输出——端点 `http://8.148.235.41/liuchuan/api/v1`（旧前缀 `/yaundian/api/v1` 已 404）。
+本地采集器按官方分类补采灰豚低粉爆文榜（12h/24h/昨日/3d/7d 五维度）推送至服务器，
+经公网只读 API 输出——端点为环境变量 `LIUCHUAN_BASE_URL`（未配置时脚本保持占位符
+`https://your-liuchuan-api.example.com/liuchuan/api/v1` 且不发请求；旧前缀
+`/yaundian/api/v1` 已 404）。通用客户端形态：任何兼容 liuchuan-data 协议的服务
+（自建或第三方）均可作为数据源。
 
 改名配套：缓存默认目录 `%LOCALAPPDATA%\liuchuan-data\cache`（v1.37 前是家目录
 `~/.liuchuan_cache`，首次启动自动复制迁移、旧目录保留；更早的 `~/.yaundian_cache`
@@ -210,4 +214,21 @@ agent 从标题、正文、标签三处提炼主题组，有几个算几个（�
 | v1.32 | 2026-11-26 | 首轮交付后用 interaction_ask 询问「是否固定人设」：`--save-profile` 把类目/定位词/默认参数写 `profile.json`，`--show-profile` 查看、`--forget-profile` 取消；固定后问卷第 1 题多出「0 沿用」，各题按「人设 → last_run → 默认」标 ★ 推荐，回「推荐」即照星号执行 | 皮仔 |
 | v1.33 | 2026-11-26 | 主题筛选本地累积：`theme_cache.json` 按类目存主题组与原始标签频次，每批增量并集（老组不丢、同批不重复计数）；看板列全部累计主题 + 本批≥2 条且未被覆盖的单标签（≤60），按本批命中→历史 seen 排序，0 命中暗显；`--clear-cache` 一并清主题缓存 | 皮仔 |
 | v1.36 | 2026-11-26 | 无 Key 前置拦截（`/meta` 探活 + 配 Key 指引，退出码 1，新增 `--allow-anon`）+ 数据新鲜度守卫（`last_ingest_at` >15 分钟 stderr WARN）+ client_id 写盘失败提示 + 429 四类文案收口 + 修正匿名档旧数字（5→10 条） | 皮仔 |
-| v1.37 | 2026-11-26 | **缓存/人设迁到用户级目录 + 路径可改（桂皮：缓存别放技能里，默认全量保留、不删；路径先默认、用户也能改）**：①新增 `_platform_dir()` / `DEFAULT_CACHE_DIR`（`%LOCALAPPDATA%\liuchuan-data\cache`，mac/Linux `~/.cache/liuchuan-data/cache`）与 `DEFAULT_CONFIG_DIR`（`%APPDATA%\liuchuan-data\config`）；数据缓存与配置分家——notes/history/theme/quota/serve 归缓存，profile/last_run 归配置；②`configure_paths()` 优先级：`--cache-dir`/`--config-dir` > `LIUCHUAN_CACHE_DIR`/`LIUCHUAN_CONFIG_DIR` > `%APPDATA%\liuchuan-data\paths.json` 指针 > 平台默认；③`--set-cache-dir` 复制现有缓存并写指针（永久生效，环境变量优先级更高），`--show-paths` 打印当前目录与文件数，两者都 `return 0` 零配额（修掉 show-paths 漏 return 误取数的坑）；④`migrate_legacy_paths()` 首次启动把旧 `~/.liuchuan_cache` 复制到新目录、旧目录原样保留，`.paths_migrated` 防重复；⑤不实现淘汰策略（桂皮：默认保存所有、不要删除），`--clear-cache` 是唯一清理入口；⑥SKILL 新增 6.4 路径章节、参数表补四个路径开关，README 新增「缓存和配置放哪」。验证：py_compile；真实迁移 32 notes + 34 history（旧目录 69 文件保留）；两个路径命令均不触发取数；缓存命中重渲染母婴看板正常 | 皮仔 |
+| v1.37 | 2026-11-26 | **缓存/人设迁到用户级目录 + 路径可改（桂皮：缓存别放技能里，默认全量保留、不删；路径先默认、用户也能改）**：①新增 `_platform_dir()` / `DEFAULT_CACHE_DIR`（`%LOCALAPPDATA%\liuchuan-data\cache`，mac/Linux `~/.cache/liuchuan-data/cache`）与 `DEFAULT_CONFIG_DIR`（`%APPDATA%\liuchuan-data\config`）；数据缓存与配置分家——notes/history/theme/quota/serve 归缓存，profile/last_run 归配置；②`configure_paths()` 优先级：`--cache-dir`/`--config-dir` > `LIUCHUAN_CACHE_DIR`/`LIUCHUAN_CONFIG_DIR` > `paths.json`（配置目录下的指针文件） 指针 > 平台默认；③`--set-cache-dir` 复制现有缓存并写指针（永久生效，环境变量优先级更高），`--show-paths` 打印当前目录与文件数，两者都 `return 0` 零配额（修掉 show-paths 漏 return 误取数的坑）；④`migrate_legacy_paths()` 首次启动把旧 `~/.liuchuan_cache` 复制到新目录、旧目录原样保留，`.paths_migrated` 防重复；⑤不实现淘汰策略（桂皮：默认保存所有、不要删除），`--clear-cache` 是唯一清理入口；⑥SKILL 新增 6.4 路径章节、参数表补四个路径开关，README 新增「缓存和配置放哪」。验证：py_compile；真实迁移 32 notes + 34 history（旧目录 69 文件保留）；两个路径命令均不触发取数；缓存命中重渲染母婴看板正常 | 皮仔 |
+| v1.38 | 2026-11-26 | **对外发布适配（首发版本 semver 落 1.37.0）**：①目录定位改写——技能改名「小红书低粉爆款数据获取」（通用客户端形态，不绑定自有服务品牌），去本机绝对路径；②数据来源章节改端点环境变量 `LIUCHUAN_BASE_URL`（未配置=占位符不发请求），去真实 IP 与明文 HTTP；③「使用前提」补端点配置指引与 `--selfcheck` 离线自检说明；④文末补「关于作者」全平台链接与引流两行（WorkBuddy 渠道包除外，构建时剥离） | 皮仔 |
+
+## 关于作者
+
+**桂皮（guipi888）** —— OPC / 超级个体实践者，专注 AI 数字员工与自媒体实战。
+
+| 平台 | 链接 |
+|------|------|
+| 🌐 个人站 / 工具站 | [原点工具站](https://mrkjai.com) |
+| 📱 小红书 | [桂皮AI实战](https://www.xiaohongshu.com/user/profile/5a409dda44363b313b9d7e15) |
+| 🎬 抖音 | [桂皮AI实战](https://v.douyin.com/QJRjHGAtrvA/) |
+| 📺 视频号 | 微信内搜「桂皮AI实战」 |
+| 💬 公众号 | 微信搜「桂皮AI实战」 |
+| 🐙 GitHub | [guipi888](https://github.com/guipi888) |
+
+> 💡 更多实用 AI 效率工具和技能，领取自媒体 IP&超级个体&一人公司资料，关注公众号「桂皮AI实战」
+> 📱 加入自媒体&AI 副业变现交流群：https://e418e2e692454bfaa8b6206e3f0ba789.app.codebuddy.work
