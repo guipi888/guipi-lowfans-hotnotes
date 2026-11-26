@@ -67,12 +67,12 @@ try:
 except ImportError:  # 沙箱/精简环境：--help / --selfcheck / --menu 不依赖 requests
     requests = None
 
-# 通用客户端版：端点走环境变量，未配置时保持占位符（不发起任何请求）。
-# 包内不出现真实 IP 与明文 HTTP——占位符域名 example.com 为保留域名。
+# 默认端点写死发布方服务地址（开箱即用）；环境变量可覆盖，便于自建成兼容服务。
+# PLACEHOLDER 仅为兜底哨兵：误传占位符地址时不发注定失败的请求。
 PLACEHOLDER_BASE_URL = "https://your-liuchuan-api.example.com/liuchuan/api/v1"
-BASE_URL = os.environ.get("LIUCHUAN_BASE_URL") or PLACEHOLDER_BASE_URL
+BASE_URL = os.environ.get("LIUCHUAN_BASE_URL") or "http://8.148.235.41/liuchuan/api/v1"
 LEGACY_BASE_URL = (os.environ.get("LIUCHUAN_LEGACY_BASE_URL")
-                   or "https://your-liuchuan-api.example.com/yaundian/api/v1")
+                   or "http://8.148.235.41/yaundian/api/v1")
 LEGACY_CACHE_DIR = Path.home() / ".yaundian_cache"  # 旧缓存目录，一次性迁到新目录
 TIME_RANGES = ("12h", "24h", "yesterday", "3d", "7d")
 SORTS = ("rank", "like", "collect", "comment", "share",
@@ -2569,13 +2569,13 @@ SELFCHECK_SAMPLE = [
      "published_at": "2026-11-26", "video_url": "", "note_type": "normal"},
 ]
 
-ENDPOINT_HINT = """未配置数据服务端点：环境变量 LIUCHUAN_BASE_URL 未设置（当前为占位符，不会发请求）。
-取数前先配置（二选一）：
+ENDPOINT_HINT = """检测到占位符端点（your-liuchuan-api.example.com），不会发请求。
+默认已内置服务地址；如需改用自建兼容服务，二选一：
   1) 环境变量（推荐，永久生效）：
      Linux/macOS:  export LIUCHUAN_BASE_URL=https://<你的服务域名>/liuchuan/api/v1
      Windows:      [Environment]::SetEnvironmentVariable("LIUCHUAN_BASE_URL","https://<你的服务域名>/liuchuan/api/v1","User")
   2) 单次指定：    --base-url https://<你的服务域名>/liuchuan/api/v1
-API Key（可选但推荐）：export LIUCHUAN_API_KEY=<你的 key>
+数据服务 Key（必填）：export LIUCHUAN_API_KEY=<找发放方领取>
 不依赖端点的离线能力：--menu / --selfcheck / --show-paths / --show-profile / --tag-report"""
 
 
@@ -3136,14 +3136,6 @@ def main() -> int:
     return 0
 
 
-# ── 引流信息（固定输出）─────────────────────────────────────────
-def _print_leadgen():
-    print("")
-    print("💡 更多实用 AI 效率工具和技能，领取自媒体 IP&超级个体&一人公司资料，关注公众号「桂皮AI实战」")
-    print("📱 加入自媒体&AI 副业变现交流群：https://e418e2e692454bfaa8b6206e3f0ba789.app.codebuddy.work")
-
 
 if __name__ == "__main__":
-    _rc = main()
-    _print_leadgen()
-    sys.exit(_rc)
+    sys.exit(main())
